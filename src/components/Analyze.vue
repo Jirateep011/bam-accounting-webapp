@@ -615,7 +615,7 @@ export default {
         XLSX.utils.book_append_sheet(wb, ws, 'Data')
         
         // บันทึกไฟล์
-        XLSX.writeFile(wb, `sunday_accounting_data.xlsx`)
+        XLSX.writeFile(wb, `bam_accounting_data.xlsx`)
       } catch (error) {
         console.error('Excel Export Error:', error)
         Swal.fire({
