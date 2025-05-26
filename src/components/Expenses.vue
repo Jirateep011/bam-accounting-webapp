@@ -5,6 +5,19 @@
       <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3">
         <h2 class="mb-0">รายการรายจ่าย</h2>
         <div class="d-flex align-items-center gap-3">
+          <!-- เพิ่มปุ่มลบรายการที่เลือกและปุ่มโหมดเลือก -->
+          <button class="btn btn-danger btn-sm" 
+                  v-if="isSelectMode && selectedTransactions.length > 0"
+                  @click="deleteSelectedTransactions">
+            <i class="fa-solid fa-trash me-1"></i>
+            ลบที่เลือก ({{ selectedTransactions.length }})
+          </button>
+          <button class="btn btn-outline-secondary btn-sm" @click="toggleSelectMode">
+            <i class="fa-solid" :class="isSelectMode ? 'fa-xmark' : 'fa-check-square'"></i>
+            {{ isSelectMode ? 'ยกเลิก' : 'เลือกหลายรายการ' }}
+          </button>
+          
+          <!-- ปุ่มที่มีอยู่เดิม -->
           <div class="filter-section d-flex align-items-center gap-2">
             <label class="text-nowrap">แสดง:</label>
             <select v-model="itemsPerPage" class="form-select form-select-sm">
@@ -13,7 +26,7 @@
               <option value="100">100 รายการ</option>
             </select>
           </div>
-          <button class="btn btn-danger btn-sm" @click="showAddForm = !showAddForm">
+          <button class="btn btn-danger btn-sm" v-if="!isSelectMode" @click="showAddForm = !showAddForm">
             <i class="bi" :class="showAddForm ? 'bi-x-lg' : 'bi-plus-lg'"></i>
             {{ showAddForm ? 'ปิด' : 'เพิ่มรายการ' }}
           </button>
@@ -75,22 +88,38 @@
       <!-- Transactions Table Column -->
       <div class="col-12 col-lg-8 order-1 order-lg-2">
         <div class="card h-100">
-          <div class="card-body p-0">
-            <div class="table-responsive">
+          <div class="card-body p-0 d-flex flex-column">  <!-- เพิ่ม d-flex และ flex-column -->
+            <div class="table-responsive flex-grow-1"> <!-- เพิ่ม flex-grow-1 -->
               <table class="table table-hover mb-0">
                 <thead>
                   <tr>
-                    <th>วันที่</th>
-                    <th>รายละเอียด</th>
-                    <th>หมวดหมู่</th>
-                    <th class="text-end">จำนวน</th>
+                    <th @click="sort('date')" style="cursor: pointer;">วันที่
+                      <i :class="getSortIcon('date')" class="sort-icon"></i>
+                    </th>
+                    <th @click="sort('description')" style="cursor: pointer;">รายละเอียด
+                      <i :class="getSortIcon('description')" class="sort-icon"></i>
+                    </th>
+                    <th @click="sort('category')" style="cursor: pointer;">หมวดหมู่
+                      <i :class="getSortIcon('category')" class="sort-icon"></i>
+                    </th>
+                    <th @click="sort('amount')" class="text-end" style="cursor: pointer;">จำนวน
+                      <i :class="getSortIcon('amount')" class="sort-icon"></i>
+                    </th>
                     <th class="text-end">จัดการ</th>
                   </tr>
                 </thead>
                 <tbody>
                   <tr v-for="entry in filteredAndPaginatedExpenses" 
                       :key="entry.id"
-                      class="transaction-row">
+                      :class="['transaction-row', { 'selected': isTransactionSelected(entry.id) }]"
+                      @click="handleRowClick(entry)">
+                    <!-- เพิ่ม checkbox column ถ้าอยู่ในโหมดเลือก -->
+                    <td v-if="isSelectMode" class="checkbox-column" @click.stop>
+                      <input type="checkbox" 
+                             class="form-check-input"
+                             :checked="isTransactionSelected(entry.id)"
+                             @click="toggleTransactionSelection(entry.id)">
+                    </td>
                     <td>{{ formatDate(entry.date) }}</td>
                     <td>{{ entry.description }}</td>
                     <td>
@@ -99,7 +128,7 @@
                       </span>
                     </td>
                     <td class="text-danger text-end">{{ formatAmount(entry.amount) }} ฿</td>
-                    <td class="text-end">
+                    <td class="text-end" v-if="!isSelectMode">
                       <div class="btn-group btn-group-sm">
                         <button class="btn btn-outline-secondary btn-sm" @click="editTransaction(entry)">
                           <i class="bi bi-pencil"></i>
@@ -121,35 +150,35 @@
                 </tbody>
               </table>
             </div>
-          </div>
-        </div>
 
-        <!-- Pagination -->
-        <div class="pagination-section mt-4">
-          <div class="d-flex flex-column flex-md-row justify-content-between align-items-center gap-3">
-            <div class="text-muted">
-              แสดง {{ startIndex + 1 }} ถึง {{ endIndex }} จาก {{ sortedExpenses.length }} รายการ
+            <!-- ย้าย pagination มาอยู่ใน card-body -->
+            <div class="pagination-wrapper p-3 mt-auto border-top"> <!-- เพิ่ม class และ style ใหม่ -->
+              <div class="d-flex flex-column flex-md-row justify-content-between align-items-center gap-3">
+                <div class="text-muted">
+                  แสดง {{ startIndex + 1 }} ถึง {{ endIndex }} จาก {{ sortedExpenses.length }} รายการ
+                </div>
+                <nav v-if="totalPages > 1">
+                  <ul class="pagination pagination-sm mb-0"> <!-- เพิ่ม mb-0 -->
+                    <li class="page-item" :class="{ disabled: currentPage === 1 }">
+                      <button class="page-link" @click="changePage(currentPage - 1)">
+                        <i class="bi bi-chevron-left"></i>
+                      </button>
+                    </li>
+                    <li v-for="page in displayedPages" 
+                        :key="page" 
+                        class="page-item"
+                        :class="{ active: currentPage === page }">
+                      <button class="page-link" @click="changePage(page)">{{ page }}</button>
+                    </li>
+                    <li class="page-item" :class="{ disabled: currentPage === totalPages }">
+                      <button class="page-link" @click="changePage(currentPage + 1)">
+                        <i class="bi bi-chevron-right"></i>
+                      </button>
+                    </li>
+                  </ul>
+                </nav>
+              </div>
             </div>
-            <nav v-if="totalPages > 1">
-              <ul class="pagination pagination-sm mb-0">
-                <li class="page-item" :class="{ disabled: currentPage === 1 }">
-                  <button class="page-link" @click="changePage(currentPage - 1)">
-                    <i class="bi bi-chevron-left"></i>
-                  </button>
-                </li>
-                <li v-for="page in displayedPages" 
-                    :key="page" 
-                    class="page-item"
-                    :class="{ active: currentPage === page }">
-                  <button class="page-link" @click="changePage(page)">{{ page }}</button>
-                </li>
-                <li class="page-item" :class="{ disabled: currentPage === totalPages }">
-                  <button class="page-link" @click="changePage(currentPage + 1)">
-                    <i class="bi bi-chevron-right"></i>
-                  </button>
-                </li>
-              </ul>
-            </nav>
           </div>
         </div>
       </div>
@@ -176,6 +205,11 @@ export default {
     const selectedDate = ref(new Date())
     const showAddForm = ref(false)
     const editingTransaction = ref(null)
+
+    const sortConfig = ref({
+      key: 'date', // default sort by date
+      direction: 'desc' // default newest first
+    })
 
     const sortedExpenses = computed(() => {
       return [...store.state.expenses].sort((a, b) =>
@@ -311,6 +345,112 @@ export default {
       selectedDate.value = newDate
     }
 
+    const sort = (key) => {
+      if (sortConfig.value.key === key) {
+        // Toggle direction if clicking same column
+        sortConfig.value.direction = sortConfig.value.direction === 'asc' ? 'desc' : 'asc'
+      } else {
+        // New column, set default to descending
+        sortConfig.value.key = key
+        sortConfig.value.direction = 'desc'
+      }
+    }
+
+    const getSortIcon = (key) => {
+      if (sortConfig.value.key === key) {
+        return sortConfig.value.direction === 'asc' 
+          ? 'fa-solid fa-sort-up' 
+          : 'fa-solid fa-sort-down'
+      }
+      return 'fa-solid fa-sort'
+    }
+
+    const sortedData = computed(() => {
+      const data = [...filteredExpenses.value] // or whatever your data source is
+      
+      return data.sort((a, b) => {
+        let compareResult = 0
+        
+        switch(sortConfig.value.key) {
+          case 'date':
+            compareResult = new Date(a.date) - new Date(b.date)
+            break
+          case 'amount':
+            compareResult = Number(a.amount) - Number(b.amount)
+            break
+          case 'description':
+            compareResult = a.description.localeCompare(b.description)
+            break
+          case 'category':
+            compareResult = getPocketName(a.pocketId).localeCompare(getPocketName(b.pocketId))
+            break
+          default:
+            compareResult = 0
+        }
+        
+        return sortConfig.value.direction === 'asc' ? compareResult : -compareResult
+      })
+    })
+
+    const paginatedData = computed(() => {
+      return sortedData.value.slice(startIndex.value, endIndex.value)
+    })
+
+    // เพิ่ม imports และ state สำหรับการเลือกหลายรายการ
+    const isSelectMode = ref(false)
+    const selectedTransactions = ref([])
+
+    // เพิ่มฟังก์ชันสำหรับจัดการการเลือกรายการ
+    const toggleSelectMode = () => {
+      isSelectMode.value = !isSelectMode.value
+      if (!isSelectMode.value) {
+        selectedTransactions.value = []
+      }
+    }
+
+    const isTransactionSelected = (id) => {
+      return selectedTransactions.value.includes(id)
+    }
+
+    const toggleTransactionSelection = (id) => {
+      const index = selectedTransactions.value.indexOf(id)
+      if (index === -1) {
+        selectedTransactions.value.push(id)
+      } else {
+        selectedTransactions.value.splice(index, 1)
+      }
+    }
+
+    const handleRowClick = (entry) => {
+      if (isSelectMode.value) {
+        toggleTransactionSelection(entry.id)
+      }
+    }
+
+    // เพิ่มฟังก์ชันสำหรับลบรายการที่เลือก
+    const deleteSelectedTransactions = async () => {
+      const result = await Swal.fire({
+        title: 'ยืนยันการลบ',
+        text: `ต้องการลบรายการที่เลือกทั้งหมด ${selectedTransactions.value.length} รายการหรือไม่?`,
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonColor: '#dc3545',
+        confirmButtonText: 'ลบ',
+        cancelButtonText: 'ยกเลิก'
+      })
+
+      if (result.isConfirmed) {
+        for (const id of selectedTransactions.value) {
+          await store.dispatch('deleteTransaction', {
+            type: 'expenses',
+            id: id
+          })
+        }
+        selectedTransactions.value = []
+        isSelectMode.value = false
+      }
+    }
+
     watch(selectedDate, () => {
       currentPage.value = 1
     })
@@ -343,7 +483,17 @@ export default {
       editTransaction,
       deleteTransaction,
       handleDateSelected,
-      closeForm
+      closeForm,
+      sort,
+      getSortIcon,
+      sortConfig,
+      isSelectMode,
+      selectedTransactions,
+      toggleSelectMode,
+      isTransactionSelected,
+      toggleTransactionSelection,
+      handleRowClick,
+      deleteSelectedTransactions
     }
   }
 }
@@ -482,6 +632,36 @@ export default {
   max-width: 100%;
   padding: 0;
   background: transparent;
+}
+
+.transaction-row {
+  cursor: pointer;
+}
+
+.transaction-row.selected {
+  background-color: #e3f2fd;
+}
+
+.checkbox-column {
+  width: 40px;
+  text-align: center;
+}
+
+.form-check-input {
+  cursor: pointer;
+}
+
+/* ปรับแต่ง transition */
+.transaction-row {
+  transition: background-color 0.2s ease;
+}
+
+.transaction-row:hover {
+  background-color: #f8f9fa;
+}
+
+.transaction-row.selected:hover {
+  background-color: #d0e7f7;
 }
 
 @media (max-width: 768px) {

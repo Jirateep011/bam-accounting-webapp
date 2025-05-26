@@ -1,7 +1,12 @@
 <template>
-  <div class="dashboard">
+  <div class="dashboard container-fluid">
+    <!-- Greeting Section -->
+    <div class="greeting-section mb-4">
+      <h2>{{ greeting }}, {{ currentDay }}!</h2>
+    </div>
+
     <!-- Overview Cards -->
-    <div class="overview-cards row g-3 mb-4">
+    <div class="row g-4">
       <div class="col-12 col-md-6 col-lg-4">
         <div class="overview-card h-100">
           <div class="card-content">
@@ -46,18 +51,16 @@
     </div>
 
     <!-- Main Content Grid -->
-    <div class="row g-4">
+    <div class="row g-4 mt-4">
       <!-- Calendar Column -->
-      <div class="col-12 col-lg-4 order-2 order-lg-1">
-        <div class="card h-100">
-          <div class="card-body">
+        <div class="col-12 col-lg-4 order-2 order-lg-1">
+          <div class="card-body calendar-wrapper">
             <Calendar v-model:selectedDate="selectedDate" />
           </div>
-        </div>
       </div>
 
       <!-- Transaction Form Column -->
-      <div class="col-12 col-lg-4 order-1 order-lg-2">
+      <div class="col-12 col-md-6 col-lg-4 order-1 order-md-2">
         <div class="card h-100">
           <div class="card-body">
             <transaction-form 
@@ -121,12 +124,14 @@
 </template>
 
 <script>
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useStore } from 'vuex'
 import Calendar from './shared/Calendar.vue'
 import TransactionForm from './shared/TransactionForm.vue'
+import Swal from 'sweetalert2'
 
 export default {
+  name: 'Dashboard',
   components: {
     Calendar,
     TransactionForm
@@ -197,7 +202,70 @@ export default {
       if (!date) return ''
       return new Date(date).toLocaleDateString('th-TH')
     }
-    
+
+    // Random Greetings Array
+    const greetings = [
+      "Good day",
+      "Welcome back",
+      "Hello",
+      "Hi there",
+      "Greetings",
+      "Nice to see you"
+    ]
+
+    // Random Greeting
+    const greeting = computed(() => {
+      const randomIndex = Math.floor(Math.random() * greetings.length)
+      return greetings[randomIndex]
+    })
+
+    // Current Day
+    const currentDay = computed(() => {
+      const days = [
+        'Sunday', 'Monday', 'Tuesday', 'Wednesday', 
+        'Thursday', 'Friday', 'Saturday'
+      ]
+      const today = new Date()
+      return days[today.getDay()]
+    })
+
+    onMounted(async () => {
+      // First notification for category reminder
+      await Swal.fire({
+        title: 'เริ่มต้นใช้งาน',
+        text: 'อย่าลืมสร้างหมวดหมู่รายรับ-รายจ่ายก่อนเริ่มใช้งานนะคะ',
+        icon: 'info',
+        confirmButtonText: 'ตกลง',
+        confirmButtonColor: '#6c5ce7',
+        showCancelButton: true,
+        cancelButtonText: 'ไม่ต้องเตือนอีก',
+        footer: '<a href="/cloudpocket">ไปที่หน้าหมวดหมู่</a>'
+      }).then((result) => {
+        if (result.isDismissed) {
+          localStorage.setItem('suppressCategoryReminder', 'true')
+        }
+      })
+
+      // Second notification for backup reminder
+      if (!localStorage.getItem('lastBackupReminder') || 
+          Date.now() - parseInt(localStorage.getItem('lastBackupReminder')) > 7 * 24 * 60 * 60 * 1000) {
+        await Swal.fire({
+          title: 'สำรองข้อมูล',
+          text: 'อย่าลืมดาวน์โหลดไฟล์สำรองข้อมูลเพื่อป้องกันข้อมูลสูญหายนะคะ',
+          icon: 'warning',
+          confirmButtonText: 'ตกลง',
+          confirmButtonColor: '#6c5ce7',
+          showCancelButton: true,
+          cancelButtonText: 'เตือนอีก 7 วัน',
+          footer: '<a href="/analyze">ไปที่หน้าดาวน์โหลดข้อมูล</a>'
+        }).then((result) => {
+          if (result.isDismissed) {
+            localStorage.setItem('lastBackupReminder', Date.now().toString())
+          }
+        })
+      }
+    })
+
     return {
       selectedDate,
       filteredTotalIncome,
@@ -210,7 +278,9 @@ export default {
       recentExpenses,
       handleTransaction,
       activeTab,
-      formatDate
+      formatDate,
+      greeting,
+      currentDay
     }
   }
 }
@@ -220,6 +290,20 @@ export default {
 .dashboard {
   max-width: 1400px;
   margin: 0 auto;
+}
+
+.greeting-section {
+  border-radius: var(--border-radius);
+  padding: 1rem 0;
+  margin-bottom: 2rem;
+  text-align: start;
+}
+
+.greeting-section h2 {
+  margin: 0;
+  font-size: 1.75rem;
+  color: var(--text-color);
+  font-weight: 600;
 }
 
 .overview-card {
@@ -341,6 +425,12 @@ export default {
   color: #ff3d00;
 }
 
+.calendar-wrapper {
+  position: sticky;
+  top: 1rem;
+  z-index: 2;
+}
+
 @media (max-width: 768px) {
   .overview-card {
     padding: 1rem;
@@ -368,6 +458,14 @@ export default {
   .tab-btn {
     flex: 1;
     text-align: center;
+  }
+
+  .calendar-wrapper {
+    position: static;
+  }
+
+  .greeting-section h2 {
+    font-size: 1.5rem;
   }
 }
 </style>
